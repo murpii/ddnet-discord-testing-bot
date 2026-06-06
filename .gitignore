@@ -1,0 +1,22 @@
+# Secrets / local config (use the *_example.py files as public templates)
+config.ini
+constants.py
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# IDE
+.idea/
+
+# Runtime data & logs
+logs/
+data/map-testing/tmp/
+data/map-testing/testlogs/
+data/map-testing/diffs/
+data/map-testing/changelogs/
+data/map-testing/scores.json
+
+# Prebuilt Rust tools (not source; re-add if a cloud session must run them)
+*.exe
