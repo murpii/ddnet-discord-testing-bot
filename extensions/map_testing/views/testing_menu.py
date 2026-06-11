@@ -201,6 +201,11 @@ class TestingMenu(discord.ui.LayoutView):
 
     async def mt_debug(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True, ephemeral=True)
+        if not MapChecker.enabled:
+            await interaction.followup.send(
+                "Automatic map checks are disabled on this instance.", ephemeral=True
+            )
+            return
         tc = self.bot.testing_manager.get_tc_from_interaction(interaction)
         if tc.submission is None:
             await interaction.followup.send("No map is pinned in this channel yet.", ephemeral=True)

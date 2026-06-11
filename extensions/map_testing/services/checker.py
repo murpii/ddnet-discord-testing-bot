@@ -14,6 +14,9 @@ class MapChecker:
     BASE_DIR = Path("data/map-testing")
     TMP_DIR = BASE_DIR / "tmp"
 
+    # Set from [TESTING_CHANNELS] MAP_CHECKS at extension setup. When False, the
+    # checks are skipped entirely and every submission is treated as clean.
+    enabled: bool = True
     CACHE_MAX = 128
     cache: "OrderedDict[int, Optional[str]]" = OrderedDict()
 
@@ -30,6 +33,9 @@ class MapChecker:
         ``output`` is None for a clean map. ``from_cache`` is True when the result was
         served from the cache rather than freshly checked.
         """
+        if not cls.enabled:
+            return None, False
+
         try:
             key = submission.message.id
 
@@ -43,8 +49,14 @@ class MapChecker:
             cls.cache_put(key, result)
             return result, False
 
+        except FileNotFoundError as exc:
+            # Check binaries aren't installed (see data/map-testing/README.md): skip
+            # the check instead of flagging the map as buggy with the OS error text.
+            log.error("Map check binaries missing, treating %s as unchecked: %s", submission.filename, exc)
+            return None, False
+
         except Exception as exc:
-            # Failures (unreadable attachment, missing binary)
+            # Failures (e.g. unreadable attachment)
             # are returned but never cached, so a retry can succeed.
             log.error("Map debug failed (%s): %s", submission.filename, exc)
             return str(exc), False

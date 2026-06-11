@@ -58,6 +58,9 @@ class DDNetTestingBot(commands.Bot):
         # Map rendering (thumbnails + visual diffs) needs a GPU or software rasterizer.
         # Set [TESTING_CHANNELS] RENDERING = false on hosts without one.
         self.rendering_enabled = self.config.getboolean("TESTING_CHANNELS", "RENDERING", fallback=True)
+        # Automatic map checks shell out to the twmap-check binaries in data/map-testing/.
+        # Set [TESTING_CHANNELS] MAP_CHECKS = false to skip them entirely.
+        self.map_checks_enabled = self.config.getboolean("TESTING_CHANNELS", "MAP_CHECKS", fallback=True)
         self.session = None
         self.testing_manager = TestingManager(self)
         self.session_manager = SessionManager()

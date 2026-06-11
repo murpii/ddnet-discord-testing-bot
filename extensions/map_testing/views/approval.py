@@ -27,6 +27,68 @@ def resolved(text: str, colour: discord.Color) -> discord.ui.LayoutView:
     return ResolvedNotice(text, colour)
 
 
+class ViewTestingChannelButton(
+    discord.ui.DynamicItem[discord.ui.Button],
+    template=r"mt_view_channel:(?P<channel_id>\d+)",
+):
+    """#submit-maps: per-map access to an accepted submission's testing channel"""
+
+    def __init__(self, channel_id: int):
+        self.channel_id = channel_id
+        super().__init__(Button(
+            label="View Testing Channel",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"mt_view_channel:{channel_id}",
+        ))
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match):
+        return cls(int(match["channel_id"]))
+
+    async def callback(self, interaction: discord.Interaction):
+        channel = interaction.client.get_channel(self.channel_id)
+        if channel is None:
+            await interaction.response.send_message(
+                "That testing channel no longer exists.", ephemeral=True
+            )
+            return
+
+        member = interaction.user
+        try:
+            if channel.overwrites_for(member).read_messages:
+                await channel.set_permissions(
+                    member, overwrite=None, reason="View Testing Channel button"
+                )
+                await interaction.response.send_message(
+                    f"Removed your access to {channel.mention}.", ephemeral=True
+                )
+            elif channel.permissions_for(member).read_messages:
+                # already visible through a role, no overwrite needed.
+                await interaction.response.send_message(
+                    f"You can already see {channel.mention}.", ephemeral=True
+                )
+            else:
+                await channel.set_permissions(
+                    member, read_messages=True, reason="View Testing Channel button"
+                )
+                await interaction.response.send_message(
+                    f"You now have access to {channel.mention}. Press the button again to leave.",
+                    ephemeral=True,
+                )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I'm missing the permission to manage that channel's access.", ephemeral=True
+            )
+
+
+def resolved_with_channel(text: str, colour: discord.Color, channel_id: int) -> discord.ui.LayoutView:
+    view = ResolvedNotice(text, colour)
+    row = discord.ui.ActionRow()
+    row.add_item(ViewTestingChannelButton(channel_id))
+    view.add_item(row)
+    return view
+
+
 async def fetch_referenced_submission(interaction: discord.Interaction) -> discord.Message | None:
     """Resolve the submission/upload message an approval message replies to."""
     ref = interaction.message.reference
@@ -105,6 +167,11 @@ class ReferencedView(discord.ui.LayoutView):
         output ephemerally. Shared by DebugReport and SubmitBuggyApproval.
         """
         await interaction.response.defer(thinking=True, ephemeral=True)
+        if not MapChecker.enabled:
+            await interaction.followup.send(
+                "Automatic map checks are disabled on this instance.", ephemeral=True
+            )
+            return
         map_message = await fetch_referenced_submission(interaction)
         if map_message is None:
             return await self.gone(interaction)
@@ -154,7 +221,7 @@ class SubmitCleanApproval(ReferencedView):
             return
 
         try:
-            result = await self.bot.testing_manager.approve_submission(isubm, interaction.user)
+            result, tc = await self.bot.testing_manager.approve_submission(isubm, interaction.user)
         except Exception:  # noqa
             log.exception("Approve failed for submission %s", isubm.id)
             await interaction.followup.send("Something went wrong creating the channel.", ephemeral=True)
@@ -162,8 +229,11 @@ class SubmitCleanApproval(ReferencedView):
 
         if result is ApprovalResult.CREATED:
             await interaction.message.edit(
-                view=resolved(f"✅ Approved by {interaction.user.mention} -- testing channel created.",
-                               discord.Color.green())
+                view=resolved_with_channel(
+                    f"✅ Approved by {interaction.user.mention} -- testing channel created.",
+                    discord.Color.green(),
+                    tc.channel.id,
+                )
             )
             await interaction.followup.send("Testing channel created.", ephemeral=True)
             return
@@ -233,7 +303,7 @@ class SubmitBuggyApproval(ReferencedView):
             return
 
         try:
-            result = await self.bot.testing_manager.force_accept_submission(submission, interaction.user)
+            result, tc = await self.bot.testing_manager.force_accept_submission(submission, interaction.user)
         except Exception:  # noqa
             log.exception("Force-accept failed for submission %s", submission.id)
             await interaction.followup.send("Something went wrong creating the channel.", ephemeral=True)
@@ -241,8 +311,11 @@ class SubmitBuggyApproval(ReferencedView):
 
         if result is ApprovalResult.CREATED:
             await interaction.message.edit(
-                view=resolved(f"✅ Accepted into WAITING by {interaction.user.mention}.",
-                               discord.Color.green())
+                view=resolved_with_channel(
+                    f"✅ Accepted into WAITING by {interaction.user.mention}.",
+                    discord.Color.green(),
+                    tc.channel.id,
+                )
             )
             await interaction.followup.send("Channel created in WAITING.", ephemeral=True)
         elif result is ApprovalResult.CONFLICT:

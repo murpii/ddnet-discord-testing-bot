@@ -193,19 +193,21 @@ class TestingManager:
             )
         log.info("Declined submission %r: %s", isubm.filename, reason)
 
-    async def approve_submission(self, message: discord.Message, member) -> ApprovalResult:
+    async def approve_submission(
+        self, message: discord.Message, member
+    ) -> tuple[ApprovalResult, TestingChannel | None]:
         """Build the testing channel for a validated submission."""
         attachment = next(
             (a for a in message.attachments if a.filename.endswith(".map")), None
         )
         if not attachment:
-            return ApprovalResult.BUSY
+            return ApprovalResult.BUSY, None
 
         isubm = InitialSubmission(message=message, attachment=attachment).parse()
 
         async with self.lock:
             if message.id in self.building:
-                return ApprovalResult.BUSY
+                return ApprovalResult.BUSY, None
 
             # Re-check under the lock: a same named map may have been approved
             # or released since this submission was validated. If we can't verify
@@ -214,10 +216,10 @@ class TestingManager:
                 conflict = await self.name_conflict(isubm.name)
             except ReleasedMapsUnavailable as exc:
                 log.warning("Released-map check unavailable approving %r: %s", isubm.name, exc)
-                return ApprovalResult.UNVERIFIED
+                return ApprovalResult.UNVERIFIED, None
             if conflict:
                 await self.decline_submission(isubm, conflict)
-                return ApprovalResult.CONFLICT
+                return ApprovalResult.CONFLICT, None
             self.building.add(message.id)
             try:
                 tc = await build_channel(self.bot, isubm)
@@ -237,9 +239,11 @@ class TestingManager:
             log.info("Uploaded %r to the test backend", tc.filename)
         # Release the in-memory map, buffer() re-fetches lazily if a later diff/optimize needs it.
         tc.submission.bytes = None
-        return ApprovalResult.CREATED
+        return ApprovalResult.CREATED, tc
 
-    async def force_accept_submission(self, message: discord.Message, member) -> ApprovalResult:
+    async def force_accept_submission(
+        self, message: discord.Message, member
+    ) -> tuple[ApprovalResult, TestingChannel | None]:
         """Accepts a *bugged* submission into WAITING.
 
         The counterpart to approve_submission for maps that failed the automatic
@@ -251,22 +255,22 @@ class TestingManager:
             (a for a in message.attachments if a.filename.endswith(".map")), None
         )
         if not attachment:
-            return ApprovalResult.BUSY
+            return ApprovalResult.BUSY, None
 
         isubm = InitialSubmission(message=message, attachment=attachment).parse()
 
         async with self.lock:
             if message.id in self.building:
-                return ApprovalResult.BUSY
+                return ApprovalResult.BUSY, None
 
             try:
                 conflict = await self.name_conflict(isubm.name)
             except ReleasedMapsUnavailable as exc:
                 log.warning("Released-map check unavailable force-accepting %r: %s", isubm.name, exc)
-                return ApprovalResult.UNVERIFIED
+                return ApprovalResult.UNVERIFIED, None
             if conflict:
                 await self.decline_submission(isubm, conflict)
-                return ApprovalResult.CONFLICT
+                return ApprovalResult.CONFLICT, None
             self.building.add(message.id)
 
             try:
@@ -294,7 +298,7 @@ class TestingManager:
             log.info("Uploaded %r to the test backend", tc.filename)
         # Release the in-memory map; buffer() re-fetches lazily if a later diff/optimize needs it
         tc.submission.bytes = None
-        return ApprovalResult.CREATED
+        return ApprovalResult.CREATED, tc
 
     async def decline_isubm_submission(self, message: discord.Message, member, reason: str) -> None:
         """
