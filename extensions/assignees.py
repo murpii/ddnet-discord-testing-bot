@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from constants import Guilds, Roles, Channels, WIKI_CURATOR_ROLES
+from constants import Guilds, Roles, Channels
 
 
 @app_commands.guilds(discord.Object(Guilds.DDNET))
