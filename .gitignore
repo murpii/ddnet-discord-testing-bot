@@ -20,3 +20,5 @@ data/map-testing/scores.json
 
 # Prebuilt Rust tools (not source; re-add if a cloud session must run them)
 *.exe
+data/map-testing/twmap-*
+data/map-testing/twgpu-*

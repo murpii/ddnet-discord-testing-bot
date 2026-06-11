@@ -34,7 +34,8 @@ name check is done over HTTP against `ddnet.org`.
   an existing one).
 - The **twmap / twgpu CLI binaries** (see [section 6](#6-install-the-map-tools-binaries)) -
   used for map validation, rendering and editing. Without them, submissions can't be
-  checked and previews/diffs won't render.
+  checked and previews/diffs won't render (set `MAP_CHECKS = false` / `RENDERING = false`
+  to run without those features).
 - **For rendering only** (thumbnails + visual diffs): a GPU, or a headless software
   rasterizer. No GPU? Set `RENDERING = false` and the bot runs fine without them
   (see [section 6](#6-install-the-map-tools-binaries)).
@@ -151,8 +152,9 @@ cp config_example.ini config.ini
 Set `TOKEN_DISCORD` to your bot token. The `[DDNET]` endpoints are only needed to push maps
 to a test server, and `[DATABASE]` is read only by the migration script - both can stay at
 their defaults otherwise. Under `[TESTING_CHANNELS]`, set `RENDERING = false` on a host
-without a GPU and list any non-map channels in the testing categories (submit/info/chat) in
-`EXCLUDE`. Every option is commented in the example file.
+without a GPU, set `MAP_CHECKS = false` to skip the automatic map checks (e.g. without the
+check binaries installed), and list any non-map channels in the testing categories
+(submit/info/chat) in `EXCLUDE`. Every option is commented in the example file.
 
 ### Discord IDs -> `constants.py`
 
@@ -182,8 +184,11 @@ On **Windows** they must end in `.exe` (`twmap-edit.exe`, ...). On **Linux/macOS
 matching native builds with **no extension**. The bot appends the right suffix at runtime.
 See `data/map-testing/README.md` for details.
 
-If these are missing, the bot still starts, but submission checks and image rendering will
-fail.
+If these are missing, the bot still starts. Missing **check** binaries are logged and the
+affected submissions are treated as unchecked rather than buggy; to turn the checks off
+deliberately, set `MAP_CHECKS = false` under `[TESTING_CHANNELS]` (the debug-output buttons
+then report that checks are disabled). Missing the **rendering** binary just means
+thumbnails/diff images fail - see the next subsection.
 
 ### Rendering needs a GPU (or a software rasterizer)
 
@@ -227,7 +232,9 @@ Logs are written to `logs/bot.log` and `logs/map_testing.log` (and to the consol
    buttons (testers only).
 3. On **Approve**, the bot creates a map channel under `CAT_TESTING`, pins the map, posts a
    thumbnail + an info card + a tester-control thread (changelog, checklist, control
-   buttons).
+   buttons). The approval notice in `#submit-maps` keeps a **View Testing Channel** button:
+   anyone can click it to get access to just that map's channel (and click again to leave),
+   without needing the `TESTING` role that reveals all testing channels.
 4. Testers use the control buttons to move the map through states. The **Ready** vote needs
    two distinct votes including one full Tester. New uploads from the author auto-update the
    current map and post a **"Changes vs previous version"** thread (summary + on-demand

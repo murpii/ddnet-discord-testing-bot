@@ -1,10 +1,10 @@
 # map-testing tooling
 
-The executables in this directory are **external, prebuilt binaries** from the
-Teeworlds/DDNet Rust ecosystem. They are not part of this project's source - the bot
-just shells out to them. They do the actual heavy lifting (parsing, editing, checking
-and rendering maps); the bot's own code is only a thin wrapper that feeds them a map
-file and reads the result back.
+This directory is where the **external, prebuilt binaries** from the Teeworlds/DDNet
+Rust ecosystem belong. They are **not shipped with this repository**, download them from the sources below and place them here. They are not
+part of this project's source - the bot just shells out to them. They do the actual
+heavy lifting (parsing, editing, checking and rendering maps); the bot's own code is
+only a thin wrapper that feeds them a map file and reads the result back.
 
 This file exists to record where they come from. It is not code.
 
