@@ -26,11 +26,8 @@ log = logging.getLogger()
 extensions = [
     ("extensions.logutils.logger", True),
     ("extensions.logutils.errorhandler", True),
-    ("extensions.assignees", True),
     ("extensions.map_testing", True),
     #("extensions.map_testing.secret_testing", True),
-    #("extensions.map_testing.bans", True),
-
 ]
 
 
