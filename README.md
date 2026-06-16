@@ -215,10 +215,7 @@ On first start the bot:
   commands appear almost immediately),
 - scans the three testing categories and loads any existing map channels,
 - creates runtime folders as needed (`logs/`, `data/map-testing/changelogs/`,
-  `data/map-testing/diffs/`).
-
-If `data/map-testing/tmp/` doesn't exist, create it (`mkdir -p data/map-testing/tmp`) -
-it's used as scratch space for the map tools.
+  `data/map-testing/diffs/`, `data/map-testing/tmp/`).
 
 Logs are written to `logs/bot.log` and `logs/map_testing.log` (and to the console).
 

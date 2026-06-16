@@ -65,6 +65,7 @@ class MapChecker:
     async def run_checks(cls, data: bytes, message_id: int) -> Optional[str]:
         tmp_path = cls.TMP_DIR / f"{message_id}.map"
         try:
+            cls.TMP_DIR.mkdir(parents=True, exist_ok=True)
             # TESTING, UNSURE IF SAFE:
             # Offloading the (multi-MB) write so it doesn't block the event loop.
             await asyncio.to_thread(tmp_path.write_bytes, data)

@@ -18,6 +18,7 @@ class MapEditor:
         edited = tmp.with_name(tmp.name + "_edit")
 
         buf = await submission.buffer()
+        tmp.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(tmp.write_bytes, buf.getvalue())
 
         _, ext = check_os()
@@ -53,6 +54,7 @@ class MapThumbnailer:
         png = Path(f"{submission.message.id}.png")
 
         buf = await submission.buffer()
+        tmp.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(tmp.write_bytes, buf.getvalue())
 
         _, ext = check_os()
