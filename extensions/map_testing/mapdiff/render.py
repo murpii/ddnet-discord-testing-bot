@@ -31,6 +31,7 @@ class MapRenderer:
     ) -> bytes | None:
         uid = uuid.uuid4().hex
         tmp = cls.BASE_DIR / "tmp" / f"{uid}.map"
+        tmp.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(tmp.write_bytes, data)
 
         _, ext = check_os()
@@ -43,13 +44,17 @@ class MapRenderer:
         args.append(str(tmp))
 
         try:
-            await run_process_exec(exe, *args)
+            stdout, stderr = await run_process_exec(exe, *args)
             outputs = sorted(Path(".").glob(f"{uid}*.png"))
             if not outputs:
+                log.error(
+                    "Map render produced no image (exe=%s args=%s)\nstdout: %s\nstderr: %s",
+                    exe, args, stdout.strip(), stderr.strip(),
+                )
                 return None
             return await asyncio.to_thread(outputs[0].read_bytes)
         except Exception as exc:
-            log.error("Map render failed: %s", exc)
+            log.exception("Map render failed (exe=%s args=%s): %s", exe, args, exc)
             return None
         finally:
             if tmp.exists():
@@ -169,6 +174,10 @@ async def render_diff_images(new_bytes, result, res: int = 1200, max_clusters: i
         result.change_clusters(max_clusters=max_clusters)
         if (result.width and result.height) else ([], 0)
     )
+    log.debug(
+        "render_diff_images: map=%sx%s clusters=%d total_changed_areas=%d",
+        result.width, result.height, len(clusters), total,
+    )
     images: list[bytes] = []
     if clusters:
         for added, removed, modified, bbox in clusters:
@@ -180,6 +189,11 @@ async def render_diff_images(new_bytes, result, res: int = 1200, max_clusters: i
                 images.append(await asyncio.to_thread(
                     overlay_changes, png, added, removed, modified, cx, cy, zoom, res
                 ))
+        if not images:
+            log.error(
+                "render_diff_images: all %d cluster render(s) failed -- see preceding render errors",
+                len(clusters),
+            )
         return images, total
 
     # No game-coordinate tile change (e.g. quad/tileset-only) -- show the whole map.
@@ -192,4 +206,9 @@ async def render_diff_images(new_bytes, result, res: int = 1200, max_clusters: i
         png = await MapRenderer.render(new_bytes, resolution=f"{res}x{res}")
     if png is not None:
         images.append(png)
+    else:
+        log.error(
+            "render_diff_images: whole-map render failed (map=%sx%s) -- see preceding render error",
+            result.width, result.height,
+        )
     return images, total
