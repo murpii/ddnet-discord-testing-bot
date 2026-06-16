@@ -32,6 +32,31 @@ This file exists to record where they come from. It is not code.
   renderer, also by Patiga & Zwelf:
   https://gitlab.com/Patiga/twgpu (published as the `twgpu-tools` crate on crates.io).
 
+## DDNet `data` directory (required for rendering)
+
+`twgpu-map-photography` rasterizes the **external** tilesets/mapres a map references
+(`grass_main`, `generic_unhookable`, …). These are *not* embedded in the `.map` file.
+To find them it needs the DDNet **`data` directory** (specifically `mapres/`). It looks,
+in order, for:
+
+1. an installed DDNet/Teeworlds game (via Steam, or any client that's been opened once),
+2. a `data/` directory in the current working directory, then
+3. a `data/` directory **next to the `twgpu-map-photography` executable**.
+
+On a machine with DDNet installed, step 1 succeeds and nothing extra is needed.
+A **server** typically has no game installed, so place the DDNet `data` directory here,
+next to the executable:
+
+```
+data/map-testing/
+├── twgpu-map-photography      (the renderer binary)
+└── data/
+    └── mapres/                (the full DDNet mapres set: grass_main.png, …)
+```
+
+Without it the renderer loads the map but writes no PNG, failing with
+`IoError(Custom { kind: NotFound, ... dir: Data })`.
+
 ## Notes
 
 - These are **platform-specific** builds. On Windows they carry a `.exe` suffix; the

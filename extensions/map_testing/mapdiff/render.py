@@ -47,9 +47,19 @@ class MapRenderer:
             stdout, stderr = await run_process_exec(exe, *args)
             outputs = sorted(Path(".").glob(f"{uid}*.png"))
             if not outputs:
+                # The renderer resolves the DDNet 'data' dir (mapres tilesets) from an
+                # installed game or a 'data' dir next to its executable. On a server with
+                # neither, it loads the map but emits no image...
+                hint = ""
+                if "NotFound" in stderr and "Data" in stderr:
+                    hint = (
+                        f"DDNet 'data' directory (mapres tilesets) not found. Place one at "
+                        f"'{cls.BASE_DIR / 'data'}' or install DDNet on this host "
+                        f"(see data/map-testing/README.md)"
+                    )
                 log.error(
-                    "Map render produced no image (exe=%s args=%s)\nstdout: %s\nstderr: %s",
-                    exe, args, stdout.strip(), stderr.strip(),
+                    "Map render produced no image (exe=%s args=%s)%s\nstdout: %s\nstderr: %s",
+                    exe, args, hint, stdout.strip(), stderr.strip(),
                 )
                 return None
             return await asyncio.to_thread(outputs[0].read_bytes)
