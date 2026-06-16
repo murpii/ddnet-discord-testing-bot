@@ -48,14 +48,14 @@ class MapRenderer:
             outputs = sorted(Path(".").glob(f"{uid}*.png"))
             if not outputs:
                 # The renderer resolves the DDNet 'data' dir (mapres tilesets) from an
-                # installed game or a 'data' dir next to its executable. On a server with
-                # neither, it loads the map but emits no image...
+                # installed game, a 'data' dir in the working directory, or one next to its
+                # executable. On a server with none of these it loads the map but emits no image...
                 hint = ""
                 if "NotFound" in stderr and "Data" in stderr:
                     hint = (
                         f"DDNet 'data' directory (mapres tilesets) not found. Place one at "
-                        f"'{cls.BASE_DIR / 'data'}' or install DDNet on this host "
-                        f"(see data/map-testing/README.md)"
+                        f"'{Path('data').resolve()}' (the bot's working dir) or install DDNet "
+                        f"on this host (see data/map-testing/README.md)"
                     )
                 log.error(
                     "Map render produced no image (exe=%s args=%s)%s\nstdout: %s\nstderr: %s",

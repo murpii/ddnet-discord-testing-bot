@@ -44,14 +44,15 @@ in order, for:
 3. a `data/` directory **next to the `twgpu-map-photography` executable**.
 
 On a machine with DDNet installed, step 1 succeeds and nothing extra is needed.
-A **server** typically has no game installed, so place the DDNet `data` directory here,
-next to the executable:
+A **server** typically has no game installed, so it falls to step 2: a `data/`
+directory in the **bot's working directory**. The bot is started from the repo root,
+so that is the repo-level `data/` folder. Place the DDNet `mapres` set there:
 
 ```
-data/map-testing/
-├── twgpu-map-photography      (the renderer binary)
+<repo root>/            (the bot's working directory)
 └── data/
-    └── mapres/                (the full DDNet mapres set: grass_main.png, …)
+    ├── mapres/         (the full DDNet mapres set: grass_main.png, …)  ← add this
+    └── map-testing/    (this directory: binaries, tmp/, diffs/, …)
 ```
 
 Without it the renderer loads the map but writes no PNG, failing with
