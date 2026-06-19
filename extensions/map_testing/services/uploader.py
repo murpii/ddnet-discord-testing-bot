@@ -5,7 +5,7 @@ from utils.conn import ddnet_upload
 
 
 async def upload_submission(session, submission: Submission, tc: TestingChannel, config):
-    map_name = tc.map_name
+    map_name = tc.filename
     buf = await submission.buffer()
     try:
         await ddnet_upload(

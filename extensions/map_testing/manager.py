@@ -13,7 +13,7 @@ from extensions.map_testing.states import Transition, TransitionContext, resolve
 from extensions.map_testing.models.submissions import Submission, InitialSubmission
 from extensions.map_testing.services.checker import MapChecker
 from extensions.map_testing.services.channel import build_channel
-from extensions.map_testing.services.loader import load_testing_channel
+from extensions.map_testing.services.loader import load_testing_channel, load_submission_from_pins
 from extensions.map_testing.services.released_maps import ReleasedMaps, ReleasedMapsUnavailable
 from extensions.map_testing.services.uploader import upload_submission
 from extensions.map_testing.mapdiff import MapDiff, VersionDiff, clear_channel_diffs
@@ -27,6 +27,7 @@ from extensions.map_testing.views.approval import (
 )
 from extensions.map_testing.views.embeds import (
     BuggyWaiting,
+    IdenticalUpload,
     MapReleased,
     MovedBackAfterUpdate,
     SubmissionDeclinedNotice,
@@ -56,6 +57,14 @@ class TestingManager:
 
         # sourced from ddnet.org's release list.
         self.released_maps = ReleasedMaps(bot)
+
+        self.pending_approvals: dict[int, tuple[int, int]] = {}
+
+    def track_approval(self, upload_id: int, prompt: discord.Message) -> None:
+        self.pending_approvals[upload_id] = (prompt.channel.id, prompt.id)
+
+    def untrack_approval(self, upload_id: int) -> None:
+        self.pending_approvals.pop(upload_id, None)
 
     def request_scores_refresh(self) -> None:
         self.scores_topic.request()
@@ -147,21 +156,23 @@ class TestingManager:
         # twmaps check
         debug_output = await MapChecker.debug(isubm)
         if debug_output:
-            await message.reply(
+            prompt = await message.reply(
                 view=SubmitBuggyApproval(self.bot),
                 mention_author=False,
                 allowed_mentions=discord.AllowedMentions(users=True),
             )
+            self.track_approval(message.id, prompt)
             log.info("Submission %r from %s failed map validation", isubm.filename, message.author)
             return
 
         # Valid map: post the approval buttons. The testing channel is only created
         # once a staff member clicks Approve (see SubmitCleanApproval / approve_submission).
-        await message.reply(
+        prompt = await message.reply(
             view=SubmitCleanApproval(self.bot, message.author),
             mention_author=False,
             allowed_mentions=discord.AllowedMentions.none(),
         )
+        self.track_approval(message.id, prompt)
         log.info("Submission %r from %s validated; awaiting staff approval", isubm.filename, message.author)
 
     async def name_conflict(self, name: str) -> str | None:
@@ -194,7 +205,7 @@ class TestingManager:
         log.info("Declined submission %r: %s", isubm.filename, reason)
 
     async def approve_submission(
-        self, message: discord.Message, member
+            self, message: discord.Message, member
     ) -> tuple[ApprovalResult, TestingChannel | None]:
         """Build the testing channel for a validated submission."""
         attachment = next(
@@ -242,7 +253,7 @@ class TestingManager:
         return ApprovalResult.CREATED, tc
 
     async def force_accept_submission(
-        self, message: discord.Message, member
+            self, message: discord.Message, member
     ) -> tuple[ApprovalResult, TestingChannel | None]:
         """Accepts a *bugged* submission into WAITING.
 
@@ -343,6 +354,14 @@ class TestingManager:
 
         # A clean upload from a trusted author with the right filename goes live immediatelyy
         if is_trusted and filename_matches and not debug_output:
+            if await self.same_as_current(tc, submission):
+                await message.reply(
+                    view=IdenticalUpload(),
+                    mention_author=False,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+                log.info("Skipped identical re-upload from %s in #%s", message.author, tc.channel)
+                return
             previous = tc.submission
             await upload_submission(self.bot.session, submission, tc, self.bot.config)
             await self.set_current_map(tc, submission)
@@ -375,27 +394,33 @@ class TestingManager:
         if debug_output:
             await self.debug_report(message)
 
-        await message.channel.send(
+        prompt = await message.channel.send(
             view=ChannelUploadApproval(self.bot, message.author, reason),
             allowed_mentions=discord.AllowedMentions.none(),
             reference=message,
         )
+        self.track_approval(message.id, prompt)
         log.info("Submission from %s in #%s awaiting approval (%s)", message.author, tc.channel, reason)
 
-    async def confirm_upload(self, message: discord.Message, member) -> None:
-        """Upload a pending submission as is and make it the channels current map."""
+    async def confirm_upload(self, message: discord.Message, member) -> bool:
+        """Upload a pending submission as is and make it the channel's current map.
+        Returns False (uploading nothing) when it is identical to the current map."""
         tc = self.test_channels.get(message.channel.id)
         if tc is None:
-            return
+            return False
 
         attachment = next(
             (a for a in message.attachments if a.filename.endswith(".map")),
             None
         )
         if not attachment:
-            return
+            return False
 
         submission = Submission(message=message, attachment=attachment)
+        if await self.same_as_current(tc, submission):
+            log.info("Skipped identical approved upload from %s in #%s", member, tc.channel)
+            return False
+
         previous = tc.submission
         await upload_submission(self.bot.session, submission, tc, self.bot.config)
         await self.set_current_map(tc, submission)
@@ -403,23 +428,14 @@ class TestingManager:
         await self.apply_author_update(tc, submission.message.author)
         await self.post_version_diff(tc, previous, submission)
         submission.bytes = None  # release the in-memory map; re-fetched lazily if needed
+        return True
 
-    # TODO: Maybe don't unpin, as the pin limit was raised drastically in the past.
     async def set_current_map(self, tc: TestingChannel, submission: Submission) -> None:
         """
         Makes a ``submission`` the channel's current map.
         Pins the new submission's message and unpins the previous current map
         """
-        previous = tc.submission
         tc.submission = submission
-
-        if previous is not None and previous.message.id != submission.message.id:
-            prev_msg = previous.message
-            if prev_msg.channel.id == tc.channel.id and prev_msg.pinned:
-                try:
-                    await prev_msg.unpin()
-                except discord.HTTPException as exc:
-                    log.warning("Failed to unpin previous map in #%s: %s", tc.channel, exc)
 
         if not submission.message.pinned:
             try:
@@ -427,21 +443,50 @@ class TestingManager:
             except discord.HTTPException as exc:
                 log.warning("Failed to pin submission in #%s: %s", tc.channel, exc)
 
-    async def post_version_diff(self, tc: TestingChannel, previous: Submission | None, new: Submission) -> None:
-        """Post what changed vs. the previous map in a thread off the new upload."""
-        if previous is None or previous.message.id == new.message.id:
-            return
+    @staticmethod
+    async def same_as_current(tc: TestingChannel, submission: Submission) -> bool:
+        """
+        True if `submission` is byte-identical to the channel's current map, so
+        there's nothing new to upload.
+        """
+        current = tc.submission
+        if current is None:
+            return False
         try:
-            result = await MapDiff.diff(previous, new)
+            current_bytes = (await current.buffer()).getvalue()
+            new_bytes = (await submission.buffer()).getvalue()
+        except discord.HTTPException:
+            return False
+        return current_bytes == new_bytes
+
+    async def diff_against_base(
+            self, tc: TestingChannel, previous: Submission | None, new: Submission
+    ) -> tuple[Submission | None, "MapDiffResult | None"]:
+        if previous is not None and previous.message.id != new.message.id:
+            try:
+                return previous, await MapDiff.diff(previous, new)
+            except Exception:
+                log.warning("Diff against the previous version failed in #%s; trying pins", tc.channel)
+
+        base = await load_submission_from_pins(tc.channel, exclude_message_id=new.message.id)
+        if base is None or base.message.id == new.message.id:
+            return None, None
+        try:
+            return base, await MapDiff.diff(base, new)
         except Exception:
             log.exception("Version diff failed in #%s", tc.channel)
-            return
-        if not result.has_changes:
+            return None, None
+
+    async def post_version_diff(self, tc: TestingChannel, previous: Submission | None, new: Submission) -> None:
+        """Post what changed vs. the previous map in a thread off the new upload."""
+        baseline, result = await self.diff_against_base(tc, previous, new)
+        if result is None or not result.has_changes:
             return
 
         view = VersionDiff(
-            result.summary_markdown(), previous.message.id, new.message.id,
+            result.summary_markdown(), baseline.message.id, new.message.id,
             show_visual_diff=self.bot.rendering_enabled,
+            compared_url=baseline.message.jump_url,
         )
         try:
             thread = await new.message.create_thread(name=DIFF_THREAD_NAME)
@@ -463,14 +508,14 @@ class TestingManager:
             log.warning("Couldn't post version diff into the diff thread in #%s: %s", tc.channel, exc)
 
     async def apply_transition(
-        self,
-        tc: TestingChannel,
-        transition: Transition,
-        actor,
-        *,
-        changelog_string: str,
-        notice: discord.ui.LayoutView | None = None,
-        ping_mappers: bool = False,
+            self,
+            tc: TestingChannel,
+            transition: Transition,
+            actor,
+            *,
+            changelog_string: str,
+            notice: discord.ui.LayoutView | None = None,
+            ping_mappers: bool = False,
     ) -> None:
         """Apply a resolved Transition's common effects.
 
@@ -631,9 +676,9 @@ class TestingManager:
             return
 
         summary = (
-            f"Archived **{tc.map_name}** ({testlog.message_count} messages) to "
-            f"`{output_dir}`"
-            + (" and uploaded to DDNet." if upload else ".")
+                f"Archived **{tc.map_name}** ({testlog.message_count} messages) to "
+                f"`{output_dir}`"
+                + (" and uploaded to DDNet." if upload else ".")
         )
 
         if delete:

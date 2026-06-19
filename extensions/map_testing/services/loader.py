@@ -54,25 +54,49 @@ async def load_testing_channel(bot, channel: discord.TextChannel) -> TestingChan
     return tc
 
 
-async def load_submission_from_pins(channel: discord.TextChannel) -> Optional[Submission]:
+async def load_submission_from_pins(
+        channel: discord.TextChannel, exclude_message_id: Optional[int] = None
+) -> Optional[Submission]:
     try:
         pins = await channel.pins()
     except discord.Forbidden:
         logging.warning(f"{channel.name}: Cannot fetch pins")
-        return None
+        pins = []
 
-    pins = sorted(pins, key=lambda m: m.created_at, reverse=True)
-    for pinned in pins:
-        msg = await channel.fetch_message(pinned.id) # This makes everything very slow unfortunately.
+    for pinned in sorted(pins, key=lambda m: m.created_at, reverse=True):
+        if pinned.id == exclude_message_id:
+            continue
+        msg = await channel.fetch_message(pinned.id)  # This makes everything very slow unfortunately.
         attachment = next(
             (a for a in msg.attachments if a.filename.endswith(".map")),
             None
         )
-        if not attachment:
-            print("No Attachment")
-            continue
+        if attachment:
+            return Submission(message=msg, attachment=attachment)
 
-        return Submission(message=msg, attachment=attachment)
+    # No pinned map at all. This should normally never happen. the bot pins the
+    # initial upload at channel creation (services/channel.py build_channel ->
+    # map_message.pin()), pins every new version (set_current_map), and keeps the
+    # whole history pinned.
+    return await load_submission_from_history(channel, exclude_message_id=exclude_message_id)
+
+
+async def load_submission_from_history(
+        channel: discord.TextChannel, exclude_message_id: Optional[int] = None
+) -> Optional[Submission]:
+    """Fallback for channels with no pinned map"""
+    try:
+        async for msg in channel.history(limit=500):
+            if msg.id == exclude_message_id:
+                continue
+            attachment = next(
+                (a for a in msg.attachments if a.filename.endswith(".map")),
+                None
+            )
+            if attachment:
+                return Submission(message=msg, attachment=attachment)
+    except discord.Forbidden:
+        logging.warning(f"{channel.name}: Cannot read history for map fallback")
     return None
 
 
@@ -113,6 +137,7 @@ async def get_channel_thread(channel: discord.TextChannel):
     per-upload version-diff thread. The diff threads carry a known constant name, so
     we pick the first thread that *isn't* a diff thread (active first, then archived).
     """
+
     def is_control(t) -> bool:
         return t.name != DIFF_THREAD_NAME
 

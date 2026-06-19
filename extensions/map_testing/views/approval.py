@@ -101,7 +101,7 @@ async def fetch_referenced_submission(interaction: discord.Interaction) -> disco
 
 
 async def send_debug_output(
-    interaction: discord.Interaction, output: str | None, *, cached: bool = False
+        interaction: discord.Interaction, output: str | None, *, cached: bool = False
 ) -> None:
     """
     Sends twmap map-check output as an ephemeral followup.
@@ -125,6 +125,7 @@ class ReferencedView(discord.ui.LayoutView):
     Shared scaffolding for persistent views whose buttons act on the message the
     view replies to (recovered from the reply reference, so no per-message state).
     """
+
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.bot = bot
@@ -154,6 +155,9 @@ class ReferencedView(discord.ui.LayoutView):
             await interaction.followup.send(msg, ephemeral=True)
         else:
             await interaction.response.send_message(msg, ephemeral=True)
+        ref = interaction.message.reference
+        if ref is not None and ref.message_id is not None:
+            interaction.client.testing_manager.untrack_approval(ref.message_id)
         try:
             await interaction.message.edit(
                 view=resolved("⚠️ The original submission was deleted.", discord.Color.dark_gray())
@@ -194,6 +198,7 @@ class SubmitCleanApproval(ReferencedView):
     #submit-maps: a valid submission awaiting staff approval.
     Approve builds the testing channel; Decline marks it declined and DMs the author.
     """
+
     def __init__(self, bot, member: discord.abc.User | None = None):
         super().__init__(bot)
         mention = member.mention if member else "Someone"
@@ -228,6 +233,7 @@ class SubmitCleanApproval(ReferencedView):
             return
 
         if result is ApprovalResult.CREATED:
+            self.bot.testing_manager.untrack_approval(isubm.id)
             await interaction.message.edit(
                 view=resolved_with_channel(
                     f"✅ Approved by {interaction.user.mention} -- testing channel created.",
@@ -238,9 +244,10 @@ class SubmitCleanApproval(ReferencedView):
             await interaction.followup.send("Testing channel created.", ephemeral=True)
             return
         elif result is ApprovalResult.CONFLICT:
+            self.bot.testing_manager.untrack_approval(isubm.id)
             await interaction.message.edit(
                 view=resolved(f"❌ Declined by {interaction.user.mention} -- the map name is already taken.",
-                               discord.Color.dark_red())
+                              discord.Color.dark_red())
             )
             await interaction.followup.send("Declined. A map with that name already exists.", ephemeral=True)
             return
@@ -269,6 +276,7 @@ class SubmitCleanApproval(ReferencedView):
 
 class SubmitBuggyApproval(ReferencedView):
     """An initial submission that failed the automatic map checks."""
+
     def __init__(self, bot):
         super().__init__(bot)
         self.add(
@@ -310,6 +318,7 @@ class SubmitBuggyApproval(ReferencedView):
             return
 
         if result is ApprovalResult.CREATED:
+            self.bot.testing_manager.untrack_approval(submission.id)
             await interaction.message.edit(
                 view=resolved_with_channel(
                     f"✅ Accepted into WAITING by {interaction.user.mention}.",
@@ -319,9 +328,10 @@ class SubmitBuggyApproval(ReferencedView):
             )
             await interaction.followup.send("Channel created in WAITING.", ephemeral=True)
         elif result is ApprovalResult.CONFLICT:
+            self.bot.testing_manager.untrack_approval(submission.id)
             await interaction.message.edit(
                 view=resolved(f"❌ Declined by {interaction.user.mention} -- the map name is already taken.",
-                               discord.Color.dark_red())
+                              discord.Color.dark_red())
             )
             await interaction.followup.send("Declined -- a map with that name already exists.", ephemeral=True)
         elif result is ApprovalResult.UNVERIFIED:
@@ -350,6 +360,7 @@ class ChannelUploadApproval(ReferencedView):
     In-channel: a pending upload (non-author, wrong filename, or buggy) held for
     manual approval. Approve uploads it as-is and makes it the current map.
     """
+
     def __init__(self, bot, member: discord.abc.User | None = None, reason: str = ""):
         super().__init__(bot)
         mention = member.mention if member else "Someone"
@@ -379,12 +390,20 @@ class ChannelUploadApproval(ReferencedView):
             return
 
         try:
-            await self.bot.testing_manager.confirm_upload(submission, interaction.user)
+            uploaded = await self.bot.testing_manager.confirm_upload(submission, interaction.user)
         except Exception:  # noqa
             log.exception("Upload approval failed for message %s", submission.id)
             await interaction.followup.send("Something went wrong uploading the map.", ephemeral=True)
             return
 
+        if not uploaded:
+            await interaction.followup.send(
+                "This map is identical to the current version, so nothing was uploaded.",
+                ephemeral=True,
+            )
+            return
+
+        self.bot.testing_manager.untrack_approval(submission.id)
         await interaction.message.edit(
             view=resolved(f"✅ Uploaded by {interaction.user.mention}.", discord.Color.green())
         )
@@ -400,6 +419,7 @@ class DebugReport(ReferencedView):
     same upload is never re-checked (it falls back to a fresh check only if the cache
     was cleared, e.g. by a restart).
     """
+
     def __init__(self, bot):
         super().__init__(bot)
         self.add(
@@ -448,6 +468,7 @@ class SubmitDeclineModal(discord.ui.Modal, title="Decline Reason"):
             await interaction.followup.send("That submission can no longer be declined.", ephemeral=True)
             return
 
+        self.bot.testing_manager.untrack_approval(self.submission.id)
         await self.approval_message.edit(
             view=resolved(f"❌ Declined by {interaction.user.mention}.", discord.Color.dark_red())
         )

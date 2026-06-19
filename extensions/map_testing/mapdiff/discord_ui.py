@@ -152,10 +152,20 @@ class VersionDiff(discord.ui.LayoutView):
     on-demand "View Visual Diff" button that renders the changed region ephemerally.
     """
 
-    def __init__(self, summary_markdown: str, old_id: int, new_id: int, show_visual_diff: bool = True):
+    def __init__(
+        self,
+        summary_markdown: str,
+        old_id: int,
+        new_id: int,
+        show_visual_diff: bool = True,
+        compared_url: str | None = None,
+    ):
         super().__init__(timeout=None)
+        text = summary_markdown
+        if compared_url:
+            text += f"\n-# Compared against the [previous version](<{compared_url}>)"
         self.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(summary_markdown),
+            discord.ui.TextDisplay(text),
             accent_colour=discord.Color.blue(),
         ))
         # The visual-diff button renders images (needs a GPU/software rasterizer); omit it

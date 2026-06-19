@@ -27,7 +27,7 @@ extensions = [
     ("extensions.logutils.logger", True),
     ("extensions.logutils.errorhandler", True),
     ("extensions.map_testing", True),
-    #("extensions.map_testing.secret_testing", True),
+    # ("extensions.map_testing.secret_testing", True),
 ]
 
 
@@ -114,7 +114,7 @@ class DDNetTestingBot(commands.Bot):
         )
 
         await self.testing_manager.load_testing_channels()
-        self.testing_manager.debug_dump()
+        # FOR DEBUG PURPOSES ONLY: self.testing_manager.debug_dump()
 
         # on_ready is called multiple times and syncing is heavily rate-limited
         # so a check here should hopefully ensure this only happens once

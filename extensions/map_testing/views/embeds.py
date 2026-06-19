@@ -1,5 +1,6 @@
 import discord
 
+
 # Filename is not really accurate, these aren't just embeds anymore.
 # Not sure how to name it yet.
 
@@ -69,6 +70,7 @@ class MapReady(discord.ui.LayoutView):
 
 class VoteNeedsTester(discord.ui.LayoutView):
     """Recorded a vote, but only Trial Testers have voted so far."""
+
     def __init__(self, tc, voter):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Container(
@@ -98,6 +100,7 @@ class BuggyWaiting(discord.ui.LayoutView):
     Used both when a map author submits a buggy update in-channel and when a tester
     force-accepts a buggy initial submission from #submit-maps.
     """
+
     def __init__(self, tc):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Container(
@@ -122,6 +125,7 @@ class ResetToTesting(discord.ui.LayoutView):
 
 class MovedBackAfterUpdate(discord.ui.LayoutView):
     """Author uploaded a clean new version; evaluation progress was collapsed."""
+
     def __init__(self, tc, state_name: str):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Container(
@@ -130,6 +134,17 @@ class MovedBackAfterUpdate(discord.ui.LayoutView):
                 f"moved back to **{state_name}**."
             ),
             accent_colour=discord.Color.darker_grey(),
+        ))
+
+
+class IdenticalUpload(discord.ui.LayoutView):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Container(
+            discord.ui.TextDisplay(
+                "This map is identical to the current version. Did you save your changes?"
+            ),
+            accent_colour=discord.Color.orange(),
         ))
 
 
@@ -171,6 +186,7 @@ class NameChanged(discord.ui.LayoutView):
 
 class MapDeclined(discord.ui.LayoutView):
     """Posted in the map channel when a tested map is declined."""
+
     def __init__(self, tc, reason: str | None = None):
         super().__init__(timeout=None)
         text = (
