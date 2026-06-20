@@ -5,6 +5,7 @@ from typing import Optional
 import discord
 
 from extensions.map_testing.enums import SubmissionState, UploadState, MapServer
+from utils.text import sanitize
 
 
 @dataclass(slots=True)
@@ -49,6 +50,7 @@ class Submission:
             f"author={self.message.author.id})"
         )
 
+
 class SubmissionValidator:
     @staticmethod
     async def check(submission: Submission) -> list[str]:
@@ -62,6 +64,7 @@ class SubmissionValidator:
             errors.append("Empty file")
 
         return errors
+
 
 @dataclass
 class InitialSubmission(Submission):
@@ -78,7 +81,7 @@ class InitialSubmission(Submission):
             raise ValueError("Invalid submission format")
 
         name = match["name"]
-        if name.lower() != self.filename[:-4].lower():
+        if sanitize(name) != self.filename[:-4]:
             raise ValueError("Filename mismatch")
 
         self.name = name
