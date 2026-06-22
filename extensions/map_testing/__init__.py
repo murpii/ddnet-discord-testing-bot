@@ -9,6 +9,7 @@ from extensions.map_testing.views.approval import (
     ViewTestingChannelButton,
 )
 from extensions.map_testing.mapdiff import VisualDiffButton
+from extensions.map_testing.views.add_coauthor import AddCoAuthorView
 from extensions.map_testing.views.checklist import ChecklistView
 from extensions.map_testing.views.testing_menu import TestingMenu
 
@@ -24,5 +25,6 @@ async def setup(bot):
     bot.add_view(SubmitBuggyApproval(bot))
     bot.add_view(ChannelUploadApproval(bot))
     bot.add_view(DebugReport(bot))
+    bot.add_view(AddCoAuthorView())
     # These buttons encode per-message/per-channel ids, so they're DynamicItems.
     bot.add_dynamic_items(VisualDiffButton, ViewTestingChannelButton)

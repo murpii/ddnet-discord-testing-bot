@@ -7,6 +7,7 @@ from extensions.map_testing.enums import MapState
 from extensions.map_testing.models.channel_factory import TestingChannel, build_topic
 from extensions.map_testing.models.submissions import InitialSubmission, Submission
 from extensions.map_testing.utils.map_tools import MapThumbnailer
+from extensions.map_testing.views.add_coauthor import AddCoAuthorButton
 from extensions.map_testing.views.checklist import ChecklistView
 from extensions.map_testing.views.testing_menu import TestingMenu
 from utils.changelog import ChangelogPaginator
@@ -142,6 +143,7 @@ async def build_submission_info(
         discord.ui.Button(
             label="Mapping Guidelines", style=discord.ButtonStyle.url, url=URLs.DDNET_MAPPING_GUIDELINES
         ),
+        AddCoAuthorButton(),
     ))
 
     view = discord.ui.LayoutView(timeout=None)

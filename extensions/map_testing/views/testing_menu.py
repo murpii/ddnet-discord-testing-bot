@@ -14,10 +14,10 @@ from extensions.map_testing.scores import add_score
 from extensions.map_testing.views.embeds import ResetToTesting, WaitingMapper
 from extensions.map_testing.views.rating_select import RatingSelect
 from extensions.map_testing.views.server_select import ServerSelect
+from extensions.map_testing.views.owner_select import OwnerSelect
 from extensions.map_testing.views.modals.decline import DeclineReasonModal
 from extensions.map_testing.views.modals.change_name import ChangeMapNameModal
 from extensions.map_testing.views.modals.change_mappers import ChangeMappersModal
-from extensions.map_testing.views.modals.change_owner import ChangeSubmissionOwnerModal
 from utils.checks import is_staff
 
 log = logging.getLogger("mt")
@@ -57,8 +57,6 @@ class TestingMenu(discord.ui.LayoutView):
             accent_colour=discord.Color.blurple(),
         ))
 
-        # (label, style, custom_id, callback). Order is preserved; Discord allows
-        # 5 buttons per ActionRow, so the controls fill ceil(n / 5) rows.
         controls = [
             ("Ready", discord.ButtonStyle.green, "TestingMenu:ready", self.mt_ready),
             ("Waiting Mapper", discord.ButtonStyle.primary, "TestingMenu:waiting", self.mt_waiting),
@@ -192,7 +190,12 @@ class TestingMenu(discord.ui.LayoutView):
         await interaction.response.send_modal(ChangeMappersModal(self.bot))
 
     async def mt_change_owner(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(ChangeSubmissionOwnerModal(self.bot))
+        tc = self.bot.testing_manager.get_tc_from_interaction(interaction)
+        await interaction.response.send_message(
+            "Select the channel owner(s):",
+            view=OwnerSelect(self.bot, tc.authors),
+            ephemeral=True,
+        )
 
     async def mt_change_server(self, interaction: discord.Interaction):
         await interaction.response.send_message(
