@@ -9,6 +9,10 @@ def header(config):
     return {"X-DDNet-Token": config.get("DDNET", "TOKEN")}
 
 
+def ddnet_enabled(config) -> bool:
+    """Master switch for all DDNet upload traffic"""
+    return config.getboolean("DDNET", "ENABLED", fallback=True)
+
 
 def upload_url(config):
     return config.get("DDNET", "UPLOAD")
@@ -19,6 +23,10 @@ def delete_url(config):
 
 
 async def ddnet_upload(session, config, asset_type: str, buf: BytesIO, filename: str):
+    if not ddnet_enabled(config):
+        log.info("DDNet integration disabled. Skipping upload of %s %s", asset_type, filename)
+        return
+
     url = upload_url(config)
     headers = header(config)
 
@@ -59,6 +67,10 @@ async def ddnet_upload(session, config, asset_type: str, buf: BytesIO, filename:
 
 
 async def ddnet_delete(session, config, filename: str):
+    if not ddnet_enabled(config):
+        log.info("DDNet integration disabled. Skipping delete of %s", filename)
+        return
+
     url = delete_url(config)
     headers = header(config)
 

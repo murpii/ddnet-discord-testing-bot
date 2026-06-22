@@ -81,7 +81,7 @@ class InitialSubmission(Submission):
             raise ValueError("Invalid submission format")
 
         name = match["name"]
-        if sanitize(name) != self.filename[:-4]:
+        if sanitize(name) != sanitize(self.filename[:-4]):
             raise ValueError("Filename mismatch")
 
         self.name = name

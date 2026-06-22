@@ -35,7 +35,7 @@ from extensions.map_testing.views.embeds import (
 from utils import changelog_store
 from utils.checks import is_staff
 from utils.conn import ddnet_delete
-from utils.text import to_discord_timestamp
+from utils.text import sanitize, to_discord_timestamp
 
 log = logging.getLogger("mt")
 
@@ -346,22 +346,24 @@ class TestingManager:
             return
 
         submission = Submission(message=message, attachment=attachment)
+
+        if await self.same_as_current(tc, submission):
+            await message.reply(
+                view=IdenticalUpload(),
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            log.info("Skipped identical re-upload from %s in #%s", message.author, tc.channel)
+            return
+
         debug_output = await MapChecker.debug(submission)
 
-        filename_matches = attachment.filename[:-4].lower() == tc.map_name.lower()
+        filename_matches = sanitize(attachment.filename[:-4]) == tc.filename
         is_author = message.author.id in {author.id for author in tc.authors}
         is_trusted = is_staff(message.author) or is_author
 
-        # A clean upload from a trusted author with the right filename goes live immediatelyy
+        # A clean upload from a trusted author with the right filename goes live immediately
         if is_trusted and filename_matches and not debug_output:
-            if await self.same_as_current(tc, submission):
-                await message.reply(
-                    view=IdenticalUpload(),
-                    mention_author=False,
-                    allowed_mentions=discord.AllowedMentions.none(),
-                )
-                log.info("Skipped identical re-upload from %s in #%s", message.author, tc.channel)
-                return
             previous = tc.submission
             await upload_submission(self.bot.session, submission, tc, self.bot.config)
             await self.set_current_map(tc, submission)
