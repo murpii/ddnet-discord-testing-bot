@@ -23,7 +23,7 @@ def human_join(seq: List[str], delim: str = ", ", final: str = " & ") -> str:
 
 
 def sanitize(text: str) -> str:
-    return re.sub(r'[\^<>{}"/|;:,.~!?@#$%=&*\]\\()\[+]', "", text.replace(" ", "_"))
+    return re.sub(r"[^\w-]", "", text.replace(" ", "_"))
 
 
 def to_discord_timestamp(dt: datetime, style: str = 'f') -> str:
