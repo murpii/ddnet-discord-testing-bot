@@ -46,6 +46,8 @@ class TestLog:
         "_attachments",
         "_attachment_blocks",
         "_emojis",
+        "_asset_sources",
+        "_current_message",
     )
 
     VERSION = 1.0
@@ -60,6 +62,8 @@ class TestLog:
         self._attachments = {}
         self._attachment_blocks = {}
         self._emojis = {}
+        self._asset_sources = {}
+        self._current_message = None
 
     @property
     def name(self) -> str:
@@ -107,7 +111,15 @@ class TestLog:
         key = hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
         filename = f"{key}.{ext}"
         self._attachments[filename] = url
+        self._note_asset_source(filename)
         return filename
+
+    def _note_asset_source(self, filename: str) -> None:
+        if self._current_message is not None:
+            self._asset_sources.setdefault(filename, self._current_message.jump_url)
+
+    def asset_source(self, filename: str) -> str | None:
+        return self._asset_sources.get(filename)
 
     def mention_name(self, uid: int) -> str:
         user = self.guild.get_member(uid) or self.bot.get_user(uid)
@@ -157,6 +169,7 @@ class TestLog:
                 raise TestLogError(":deleted-emoji:")
 
         self._emojis[f"{emoji.id}.png"] = emoji_url
+        self._note_asset_source(f"{emoji.id}.png")
 
         return {"custom-emoji": {"name": emoji.name, "id": emoji.id}}
 
@@ -198,6 +211,7 @@ class TestLog:
         # display_avatar is the custom avatar if set, else the user's default avatar.
         avatar = user.display_avatar
         self._avatars[f"{avatar.key}.png"] = str(avatar.with_format("png").url)
+        self._note_asset_source(f"{avatar.key}.png")
 
         roles = ["generic"]
         if isinstance(user, discord.Member):
@@ -268,6 +282,7 @@ class TestLog:
         ext = ext.lower()
         asset_filename = f"{attachment.id}.{ext}"
         self._attachments[asset_filename] = attachment.url
+        self._note_asset_source(asset_filename)
 
         out = {
             "id": attachment.id,
@@ -313,6 +328,7 @@ class TestLog:
                     continue
                 else:
                     self._emojis[f"{emoji.id}.png"] = str(emoji.url)
+                    self._note_asset_source(f"{emoji.id}.png")
                     chunk.update({"name": emoji.name, "id": emoji.id})
             else:
                 chunk["emoji"] = emoji
@@ -428,6 +444,7 @@ class TestLog:
 
     async def log_process(self):
         async for message in self.tc.history(limit=None, oldest_first=True):
+            self._current_message = message
             try:
                 content: List[Dict] = []
                 if message.content:
@@ -441,7 +458,8 @@ class TestLog:
                     content.append(self.handle_reactions(message.reactions))
             except TestLogError as e:
                 raise TestLogError(
-                    f"{e} | channel_id={self.tc.channel.id} | "
+                    f"{e} | message={message.jump_url} | "
+                    f"channel_id={self.tc.channel.id} | "
                     f"channel_name={self.tc.channel.name}"
                 ) from e
 
@@ -472,10 +490,18 @@ async def archive_testlog(bot, testlog: TestLog, *, output_dir: str, upload: boo
         os.makedirs(subdir, exist_ok=True)
 
         for filename, url in list(assets.items()):
+            source = testlog.asset_source(filename) or "unknown"
             async with session.get(url) as resp:
                 if resp.status != 200:
-                    log.error("Failed fetching asset %r: %s", filename, await resp.text())
-                    failed = True
+                    body = (await resp.text())[:200]
+                    gone = resp.status in (403, 404, 410)
+                    log.log(
+                        logging.WARNING if gone else logging.ERROR,
+                        "Failed fetching asset %r (%d %s) from message %s: %s",
+                        filename, resp.status, resp.reason, source, body,
+                    )
+                    if not gone:
+                        failed = True
                     continue
                 data = await resp.read()
 
@@ -493,9 +519,13 @@ async def archive_testlog(bot, testlog: TestLog, *, output_dir: str, upload: boo
                         except OSError:
                             pass
                     else:
-                        log.error("Oversized %s asset %r could not be linked", asset_type, filename)
+                        log.error(
+                            "Oversized %s asset %r (from message %s) could not be linked",
+                            asset_type, filename, source,
+                        )
                         failed = True
                 except RuntimeError:
+                    log.error("Upload failed for asset %r from message %s", filename, source)
                     failed = True
                     continue
 
