@@ -1,30 +1,32 @@
+import re
 import discord
 from typing import List, Set
 
 from utils.text import extract_ids_from_mentions, user_ids_to_mentions
 
 CHECKLIST_TASKS = [
-    "1. Map follows all mapping rules (https://ddnet.org/rules)",
-    "2. Checked for ways to escape the map",
-    "3. Checked for other skips: weapons, /spec, teleporter, team 0, keeping powerups",
-    "4. Teleporters are working and used properly",
-    "5. Switches are working and used properly",
-    "6. Special tiles are only used where necessary",
-    "7. Difficulty is kept consistent",
-    "8. No spacing issues (for the respective map type)",
-    "9. Equal amount of playtime for all players",
-    "10. Server settings are working as intended",
-    "11. Unfreeze is used conveniently",
-    "12. Reviewed testing bot warnings",
-    "13. Checked for entity bugs",
-    "14. Decoration layers are marked as HD",
-    "15. Used assets are as optimized as possible",
-    "16. Checked for design bugs",
+    "1. Map follows all [mapping rules](https://ddnet.org/rules).",
+    "2. Checked for escapes and other skips: weapons, /spec, teleporter, team 0, keeping powerups.",
+    "3. Teleporters and switches are working and used properly.",
+    "4. Special tiles are only used where necessary.",
+    "5. Difficulty is kept consistent.",
+    "6. No spacing issues (for the respective map type).",
+    "7. Equal amount of playtime for all players.",
+    "8. Server settings are working as intended.",
+    "9. Unfreeze is used conveniently.",
+    "10. Reviewed testing bot warnings.",
+    "11. Checked for entity bugs.",
+    "12. Checked for design bugs, HD decoration layers, and optimized assets.",
 ]
 
-BUTTONS_PER_ROW = 5  # 5 is the Discord maximum per row
 CHECKLIST_COLOUR = discord.Color.blurple()
 MENTION_PREFIX = "-> "
+# backwards compatibility
+TASK_LINE_RE = re.compile(r"^\s*(?:\[[^\]]*\]\s*)?(?:\(x\d+\)\s*)?\d+\.\s")
+
+
+def normalize_mention_line(line: str) -> str:
+    return line.strip().removeprefix("-# ").lstrip()
 
 
 def checklist_text_from_message(message: discord.Message) -> str:
@@ -63,10 +65,11 @@ def parse_checklist_state(text: str) -> List[Set[int]]:
     task_index = 0
     while line_index < len(lines) and task_index < len(CHECKLIST_TASKS):
         line = lines[line_index]
-        if line.startswith("["):
+        if TASK_LINE_RE.match(line):
             next_index = line_index + 1
-            if next_index < len(lines) and lines[next_index].strip().startswith(MENTION_PREFIX):
-                ids = extract_ids_from_mentions(lines[next_index], MENTION_PREFIX)
+            mention_line = normalize_mention_line(lines[next_index]) if next_index < len(lines) else ""
+            if mention_line.startswith(MENTION_PREFIX):
+                ids = extract_ids_from_mentions(mention_line, MENTION_PREFIX)
                 state[task_index].update(ids)
                 line_index = next_index + 1
             else:
@@ -89,42 +92,38 @@ class ChecklistView(discord.ui.LayoutView):
             else [set() for _ in range(len(CHECKLIST_TASKS))]
         )
 
-        container = discord.ui.Container(
-            discord.ui.TextDisplay(self._render_checklist()),
-            accent_colour=CHECKLIST_COLOUR,
+        sections = [
+            discord.ui.Section(
+                self.render_task(task_index),
+                accessory=TaskCheckButton(task_index, checked=bool(completed_user_ids)),
+            )
+            for task_index, completed_user_ids in enumerate(self.task_completion_users)
+        ]
+        self.add_item(
+            discord.ui.Container(
+                discord.ui.TextDisplay("## Checklist"),
+                *sections,
+                accent_colour=CHECKLIST_COLOUR,
+            )
         )
-        buttons = [TaskCheckButton(task_index=i) for i in range(len(CHECKLIST_TASKS))]
-        for start in range(0, len(buttons), BUTTONS_PER_ROW):
-            container.add_item(discord.ui.ActionRow(*buttons[start:start + BUTTONS_PER_ROW]))
-        self.add_item(container)
 
-    def _render_checklist(self) -> str:
-        unchecked, checked = "[ ]", "[x]"
-        entries = []
-        for task_index, completed_user_ids in enumerate(self.task_completion_users):
-            count = len(completed_user_ids)
-            if count == 0:
-                status = unchecked
-            elif count == 1:
-                status = checked
-            else:
-                status = f"{checked} (x{count})"
-
-            line = f"{status} {CHECKLIST_TASKS[task_index]}"
-            if completed_user_ids:
-                line += f"\n{MENTION_PREFIX}{user_ids_to_mentions(completed_user_ids)}"
-            entries.append(line)
-
-        return "## Checklist\n" + "\n".join(entries)
+    def render_task(self, task_index: int) -> str:
+        # No "[ ]"/"[x]" marker: the accessory button shows the checkmark, and the
+        # mention subtext (if any) shows who completed the task.
+        completed_user_ids = self.task_completion_users[task_index]
+        line = CHECKLIST_TASKS[task_index]
+        if completed_user_ids:
+            line += f"\n-# {MENTION_PREFIX}{user_ids_to_mentions(completed_user_ids)}"
+        return line
 
 
 class TaskCheckButton(discord.ui.Button):
     """A single checklist task; clicking toggles the user's completion"""
 
-    def __init__(self, task_index: int):
+    def __init__(self, task_index: int, checked: bool = False):
         super().__init__(
-            label=str(task_index + 1),
-            style=discord.ButtonStyle.secondary,
+            label="[✓]" if checked else "[ ]",
+            style=discord.ButtonStyle.success if checked else discord.ButtonStyle.secondary,
             custom_id=f"check_task_{task_index}",
         )
         self.task_index = task_index
