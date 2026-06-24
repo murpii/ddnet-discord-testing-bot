@@ -3,7 +3,6 @@ from typing import List, Set
 
 from utils.text import extract_ids_from_mentions, user_ids_to_mentions
 
-
 CHECKLIST_TASKS = [
     "1. Map follows all mapping rules (https://ddnet.org/rules)",
     "2. Checked for ways to escape the map",
@@ -28,14 +27,7 @@ CHECKLIST_COLOUR = discord.Color.blurple()
 MENTION_PREFIX = "-> "
 
 
-def _checklist_text_from_message(message: discord.Message) -> str:
-    """Join every TextDisplay's content found in a message's components.
-
-    The checklist's completion state lives in the rendered text (that's how it
-    survives a bot restart), so a single persistent view instance can serve every
-    checklist message: on each click we read the state back out of the message
-    rather than from per-message instance state.
-    """
+def checklist_text_from_message(message: discord.Message) -> str:
     def walk(components):
         for comp in components:
             content = getattr(comp, "content", None)
@@ -45,7 +37,17 @@ def _checklist_text_from_message(message: discord.Message) -> str:
             if children:
                 yield from walk(children)
 
-    return "\n".join(walk(message.components))
+    parts = list(walk(message.components))
+    # backwards compatibility
+    for embed in message.embeds:
+        if embed.title:
+            parts.append(embed.title)
+        if embed.description:
+            parts.append(embed.description)
+        for field in embed.fields:
+            parts.append(f"{field.name}\n{field.value}")
+
+    return "\n".join(parts)
 
 
 def parse_checklist_state(text: str) -> List[Set[int]]:
@@ -128,7 +130,7 @@ class TaskCheckButton(discord.ui.Button):
         self.task_index = task_index
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        state = parse_checklist_state(_checklist_text_from_message(interaction.message))
+        state = parse_checklist_state(checklist_text_from_message(interaction.message))
 
         task_users = state[self.task_index]
         if interaction.user.id in task_users:
@@ -137,6 +139,9 @@ class TaskCheckButton(discord.ui.Button):
             task_users.add(interaction.user.id)
 
         await interaction.response.edit_message(
+            content=None,
+            embed=None,
+            attachments=[],
             view=ChecklistView(state),
             allowed_mentions=discord.AllowedMentions.none(),
         )

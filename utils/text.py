@@ -61,11 +61,12 @@ def extract_ids_from_mentions(mentions_line: str, prefix: str = None) -> List[in
     Returns:
         List of extracted user IDs
     """
-    mention_text = mentions_line.strip(prefix).strip()
-    mention_tokens = mention_text.split()
+    mention_text = mentions_line.strip()
+    if prefix:
+        mention_text = mention_text.removeprefix(prefix)
 
     extracted_user_ids = []
-    for token in mention_tokens:
+    for token in mention_text.split():
         if token.startswith("<@") and token.endswith(">"):
             try:
                 clean_id = token.strip("<@!>")
