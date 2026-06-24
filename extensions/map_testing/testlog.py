@@ -9,7 +9,7 @@ from typing import Dict, List
 import discord
 
 from extensions.map_testing.models.channel_factory import TestingChannel
-from utils.conn import ddnet_upload
+from utils.conn import ddnet_upload, UploadTooLargeError
 from utils.misc import maybe_coroutine
 
 log = logging.getLogger("mt")
@@ -44,6 +44,7 @@ class TestLog:
         "_messages",
         "_avatars",
         "_attachments",
+        "_attachment_blocks",
         "_emojis",
     )
 
@@ -57,6 +58,7 @@ class TestLog:
         self._messages = []
         self._avatars = {}
         self._attachments = {}
+        self._attachment_blocks = {}
         self._emojis = {}
 
     @property
@@ -264,7 +266,8 @@ class TestLog:
             )
 
         ext = ext.lower()
-        self._attachments[f"{attachment.id}.{ext}"] = attachment.url
+        asset_filename = f"{attachment.id}.{ext}"
+        self._attachments[asset_filename] = attachment.url
 
         out = {
             "id": attachment.id,
@@ -273,13 +276,31 @@ class TestLog:
         }
 
         if ext in _IMAGE_EXTS:
-            return {"image": out}
+            block = {"image": out}
         else:
             # Non-images (incl. videos) render as a download link rather than being
             # dropped, so nothing in the channel silently disappears.
             size, unit = format_size(attachment.size)
             out.update({"filesize": size, "filesize-units": unit})
-            return {"attachment": out}
+            block = {"attachment": out}
+
+        self._attachment_blocks[asset_filename] = block
+        return block
+
+    def link_oversized_attachment(self, filename: str, url: str) -> bool:
+        block = self._attachment_blocks.get(filename)
+        if block is None:
+            return False
+
+        inner = block.get("attachment") or block.get("image") or {}
+        name = f"{inner.get('basename', '')}{inner.get('extension', '')}" or filename
+        label = f"📎 [{name}]({url})"
+        if (size := inner.get("filesize")) is not None:
+            label += f" ({size} {inner.get('filesize-units', '')})"
+
+        block.clear()
+        block["text"] = [{"text": label}]
+        return True
 
     def handle_reactions(self, reactions: List[discord.Reaction]) -> Dict:
         out = []
@@ -444,6 +465,40 @@ async def archive_testlog(bot, testlog: TestLog, *, output_dir: str, upload: boo
     session = bot.session
     config = bot.config
 
+    for asset_type, assets in testlog.assets.items():
+        if not assets:
+            continue
+        subdir = os.path.join(output_dir, "files", ASSET_DIRS[asset_type])
+        os.makedirs(subdir, exist_ok=True)
+
+        for filename, url in list(assets.items()):
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    log.error("Failed fetching asset %r: %s", filename, await resp.text())
+                    failed = True
+                    continue
+                data = await resp.read()
+
+            path = os.path.join(subdir, filename)
+            with open(path, "wb") as f:
+                f.write(data)
+
+            if upload:
+                try:
+                    await ddnet_upload(session, config, asset_type, BytesIO(data), filename)
+                except UploadTooLargeError:
+                    if testlog.link_oversized_attachment(filename, url):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+                    else:
+                        log.error("Oversized %s asset %r could not be linked", asset_type, filename)
+                        failed = True
+                except RuntimeError:
+                    failed = True
+                    continue
+
     json_dir = os.path.join(output_dir, "json")
     os.makedirs(json_dir, exist_ok=True)
 
@@ -456,29 +511,5 @@ async def archive_testlog(bot, testlog: TestLog, *, output_dir: str, upload: boo
             await ddnet_upload(session, config, "log", BytesIO(js.encode("utf-8")), testlog.name)
         except RuntimeError:
             failed = True
-
-    for asset_type, assets in testlog.assets.items():
-        if not assets:
-            continue
-        subdir = os.path.join(output_dir, "files", ASSET_DIRS[asset_type])
-        os.makedirs(subdir, exist_ok=True)
-
-        for filename, url in assets.items():
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    log.error("Failed fetching asset %r: %s", filename, await resp.text())
-                    failed = True
-                    continue
-                data = await resp.read()
-
-            with open(os.path.join(subdir, filename), "wb") as f:
-                f.write(data)
-
-            if upload:
-                try:
-                    await ddnet_upload(session, config, asset_type, BytesIO(data), filename)
-                except RuntimeError:
-                    failed = True
-                    continue
 
     return not failed

@@ -5,6 +5,10 @@ from aiohttp import FormData
 log = logging.getLogger("mt")
 
 
+class UploadTooLargeError(RuntimeError):
+    """The upload endpoint rejected a file for exceeding its size limit (HTTP 413)"""
+
+
 def header(config):
     return {"X-DDNet-Token": config.get("DDNET", "TOKEN")}
 
@@ -51,6 +55,14 @@ async def ddnet_upload(session, config, asset_type: str, buf: BytesIO, filename:
 
     async with session.post(url, data=data, headers=headers) as resp:
         text = await resp.text()
+
+        if resp.status == 413:
+            log.info(
+                "Upload rejected as too large (%s %s); linking instead",
+                asset_type,
+                filename,
+            )
+            raise UploadTooLargeError(text)
 
         if resp.status != 200:
             log.error(
