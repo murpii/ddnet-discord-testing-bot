@@ -21,12 +21,8 @@ CHECKLIST_TASKS = [
 
 CHECKLIST_COLOUR = discord.Color.blurple()
 MENTION_PREFIX = "-> "
-# backwards compatibility
+# Detects a task line: the new "1. ..." form and legacy "[x] (x2) 1. ..." embeds.
 TASK_LINE_RE = re.compile(r"^\s*(?:\[[^\]]*\]\s*)?(?:\(x\d+\)\s*)?\d+\.\s")
-
-
-def normalize_mention_line(line: str) -> str:
-    return line.strip().removeprefix("-# ").lstrip()
 
 
 def checklist_text_from_message(message: discord.Message) -> str:
@@ -67,9 +63,8 @@ def parse_checklist_state(text: str) -> List[Set[int]]:
         line = lines[line_index]
         if TASK_LINE_RE.match(line):
             next_index = line_index + 1
-            mention_line = normalize_mention_line(lines[next_index]) if next_index < len(lines) else ""
-            if mention_line.startswith(MENTION_PREFIX):
-                ids = extract_ids_from_mentions(mention_line, MENTION_PREFIX)
+            next_line = lines[next_index] if next_index < len(lines) else ""
+            if not TASK_LINE_RE.match(next_line) and (ids := extract_ids_from_mentions(next_line)):
                 state[task_index].update(ids)
                 line_index = next_index + 1
             else:
