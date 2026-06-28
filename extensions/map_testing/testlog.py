@@ -152,7 +152,7 @@ class TestLog:
         return {"multiline-codeblock": {"text": text}}
 
     @staticmethod
-    def handle_inline_codeblock(self, text: str) -> Dict:
+    def handle_inline_codeblock(text: str) -> Dict:
         return {"inline-codeblock": {"text": text}}
 
     async def handle_custom_emoji(self, animated: str, emoji_name: str, emoji_id: str) -> Dict:
