@@ -1,0 +1,29 @@
+# Secrets / local config (use the *_example.py files as public templates)
+config.ini
+constants.py
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pylintrc
+
+# IDE
+.idea/
+
+# DDNet 'data' dir for the renderer (symlink to shared-tools/ddnet-mapres;
+# no trailing slash so the rule matches the link itself, not just a real dir)
+data/mapres
+
+# Runtime data & logs
+logs/
+data/map-testing/tmp/
+data/map-testing/testlogs/
+data/map-testing/diffs/
+data/map-testing/changelogs/
+data/map-testing/scores.json
+
+# Prebuilt Rust tools (not source; re-add if a cloud session must run them)
+*.exe
+data/map-testing/twmap-*
+data/map-testing/twgpu-*

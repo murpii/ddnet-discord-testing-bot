@@ -1,0 +1,41 @@
+from enum import IntEnum, StrEnum
+
+
+class Guilds(IntEnum):
+    DDNET = 252358080522747904
+
+
+class Channels(IntEnum):
+    DBG = 853679908684955648
+
+    CAT_TESTING = 449352010072850443
+    CAT_WAITING = 746076708196843530
+    CAT_EVALUATED = 462954029643989003
+    TESTER_CHAT = 1203008423726157845
+    TESTING_INFO = 1201860080463511612
+    TESTING_SUBMIT = 455392372663123989
+
+
+class Webhooks(IntEnum):
+    DDNET_MAP_RELEASES = 345299155381649408
+
+
+class Roles(IntEnum):
+    ADMIN = 293495272892399616
+    DISCORD_MODERATOR = 737776812234506270
+    MODERATOR = 252523225810993153
+    TESTER = 293543421426008064
+    TESTER_EXCL_TOURNAMENTS = 1242099598189662209
+    TRIAL_TESTER = 1193593067744284744
+    TRIAL_TESTER_EXCL_TOURNAMENTS = 1242099757330202657
+    TESTING = 455814387169755176
+
+
+class URLs(StrEnum):
+    DDNET_MAPPING_RULES = "https://ddnet.org/mapping/rules/"
+    DDNET_MAPPING_GUIDELINES = "https://ddnet.org/mapping/guidelines/"
+    DDNET_RELEASES_MAPS = "https://ddnet.org/releases/maps.json"
+
+
+# Name of the per-upload version-diff threads (see TestingManager.post_version_diff).
+DIFF_THREAD_NAME = "Changes vs previous version"

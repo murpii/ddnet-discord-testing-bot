@@ -1,0 +1,127 @@
+import logging
+from io import BytesIO
+from aiohttp import FormData
+
+log = logging.getLogger("mt")
+
+
+class UploadFailedError(RuntimeError):
+    """Base for upload endpoint failures"""
+    error = "The upload to ddnet.org failed."
+
+
+class UploadTooLargeError(UploadFailedError):
+    """The upload endpoint rejected a file for exceeding its size limit (HTTP 413)"""
+    error = "The map file is too large to upload."
+
+
+class UploadError(UploadFailedError):
+    """The upload endpoint returned an unexpected non-200 response."""
+
+    def __init__(self, status: int, reason: str, body: str = ""):
+        self.status = status
+        self.reason = reason
+        self.body = body
+        super().__init__(f"HTTP {status} {reason}".strip())
+
+    @property
+    def friendly(self) -> str:
+        if self.status >= 500:
+            return f"ddnet.org is temporarily unavailable (HTTP {self.status} {self.reason})."
+        return f"The upload was rejected by ddnet.org (HTTP {self.status} {self.reason})."
+
+
+def header(config):
+    return {"X-DDNet-Token": config.get("DDNET", "TOKEN")}
+
+
+def ddnet_enabled(config) -> bool:
+    """Master switch for all DDNet upload traffic"""
+    return config.getboolean("DDNET", "ENABLED", fallback=True)
+
+
+def upload_url(config):
+    return config.get("DDNET", "UPLOAD")
+
+
+def delete_url(config):
+    return config.get("DDNET", "DELETE")
+
+
+async def ddnet_upload(session, config, asset_type: str, buf: BytesIO, filename: str):
+    if not ddnet_enabled(config):
+        log.info("DDNet integration disabled. Skipping upload of %s %s", asset_type, filename)
+        return
+
+    url = upload_url(config)
+    headers = header(config)
+
+    if asset_type == "map":
+        field_name = "map_name"
+    elif asset_type == "log":
+        field_name = "channel_name"
+    elif asset_type in {"attachment", "avatar", "emoji"}:
+        field_name = "asset_name"
+    else:
+        raise ValueError(f"Invalid asset type: {asset_type}")
+
+    data = FormData()
+    data.add_field("asset_type", asset_type)
+    data.add_field(field_name, filename)
+    data.add_field(
+        "file",
+        buf,
+        filename=filename,
+        content_type="application/octet-stream",
+    )
+
+    async with session.post(url, data=data, headers=headers) as resp:
+        text = await resp.text()
+
+        if resp.status == 413:
+            log.info(
+                "Upload rejected as too large (%s %s); linking instead",
+                asset_type,
+                filename,
+            )
+            raise UploadTooLargeError(text)
+
+        if resp.status != 200:
+            log.error(
+                "Upload failed (%s %s): HTTP %d %s // %s",
+                asset_type,
+                filename,
+                resp.status,
+                resp.reason,
+                text[:300],
+            )
+            raise UploadError(resp.status, resp.reason or "", text)
+
+        log.info("Uploaded %s %s", asset_type, filename)
+
+
+async def ddnet_delete(session, config, filename: str):
+    if not ddnet_enabled(config):
+        log.info("DDNet integration disabled. Skipping delete of %s", filename)
+        return
+
+    url = delete_url(config)
+    headers = header(config)
+
+    data = {"map_name": filename}
+
+    async with session.post(url, data=data, headers=headers) as resp:
+        text = await resp.text()
+
+        if resp.status != 200:
+            log.error(
+                "Delete failed %s: %s (%d %s)",
+                filename,
+                text,
+                resp.status,
+                resp.reason,
+            )
+            raise RuntimeError(text)
+
+        log.info("Deleted %s", filename)
+

@@ -1,0 +1,11 @@
+aiohttp
+dateparser
+matplotlib
+numpy
+asyncmy
+colorama
+pymorphous
+twmap
+pillow
+kaitaistruct
+discord.py
