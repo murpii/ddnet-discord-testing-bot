@@ -3,6 +3,7 @@ import io
 import discord
 from discord.ui import Button
 
+from constants import DIFF_THREAD_NAME
 from extensions.map_testing.mapdiff.cache import diff_key, load_cached_diff, store_cached_diff
 from extensions.map_testing.mapdiff.diff import MapDiff
 from extensions.map_testing.mapdiff.render import render_diff_images, render_side_by_side_images
@@ -83,7 +84,27 @@ async def render_side_by_side(old_bytes: bytes, new_bytes: bytes, result):
     return await render_side_by_side_images(old_bytes, new_bytes, result)
 
 
+async def keep_diff_thread_archived(channel) -> None:
+    """Serving a diff revives the archived thread it was clicked in, so put it back.
+
+    The response is ephemeral and leaves no message, but the thread still returns to
+    the channel's active list and pushes the tester controls down.
+    """
+    if isinstance(channel, discord.Thread) and channel.name == DIFF_THREAD_NAME:
+        try:
+            await channel.edit(archived=True)
+        except discord.HTTPException:
+            pass  # rate limited or already archived, it ages out on its own
+
+
 async def send_diff(interaction: discord.Interaction, old_id: int, new_id: int, *, kind: str, renderer):
+    try:
+        await render_and_send(interaction, old_id, new_id, kind=kind, renderer=renderer)
+    finally:
+        await keep_diff_thread_archived(interaction.channel)
+
+
+async def render_and_send(interaction: discord.Interaction, old_id: int, new_id: int, *, kind: str, renderer):
     await interaction.response.defer(thinking=True, ephemeral=True)
     if not getattr(interaction.client, "rendering_enabled", True):
         await interaction.followup.send(
