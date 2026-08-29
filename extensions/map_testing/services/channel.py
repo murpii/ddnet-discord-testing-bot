@@ -5,7 +5,9 @@ import discord
 from constants import Guilds, URLs
 from extensions.map_testing.categories import category_registry
 from extensions.map_testing.enums import MapState
-from extensions.map_testing.models.channel_factory import TestingChannel, build_topic
+from extensions.map_testing.models.channel_factory import (
+    TestingChannel, build_topic, CONTROL_THREAD_ARCHIVE_MINUTES
+)
 from extensions.map_testing.models.submissions import InitialSubmission, Submission
 from extensions.map_testing.utils.map_tools import MapThumbnailer
 from extensions.map_testing.views.add_coauthor import AddCoAuthorButton
@@ -60,6 +62,7 @@ async def build_channel(
     thread = await discord_channel.create_thread(
         name=f"{submission.name}: TESTER CONTROLS",
         message=map_message,
+        auto_archive_duration=CONTROL_THREAD_ARCHIVE_MINUTES,
     )
 
     # The map file is the channel's current map. Pin it so it's discoverable

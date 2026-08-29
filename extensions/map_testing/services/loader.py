@@ -6,7 +6,7 @@ import discord
 
 from constants import DIFF_THREAD_NAME
 from extensions.map_testing.enums import MapState
-from extensions.map_testing.models.channel_factory import TestingChannel
+from extensions.map_testing.models.channel_factory import TestingChannel, CONTROL_THREAD_ARCHIVE_MINUTES
 from extensions.map_testing.states import role_tier
 from extensions.map_testing.models.submissions import Submission
 from utils.changelog import ChangelogPaginator
@@ -149,9 +149,11 @@ async def get_channel_thread(channel: discord.TextChannel):
                 thread = t
                 break
 
-    if thread and thread.archived:
+    # Unarchive it and give it the longest window Discord allows, so the controls
+    # stay at the top of the channel instead of sinking below the diff threads.
+    if thread and (thread.archived or thread.auto_archive_duration != CONTROL_THREAD_ARCHIVE_MINUTES):
         try:
-            await thread.edit(archived=False)
+            await thread.edit(archived=False, auto_archive_duration=CONTROL_THREAD_ARCHIVE_MINUTES)
         except Exception as e:
             logging.warning(f"{channel.name}: thread issue: {e}")
 

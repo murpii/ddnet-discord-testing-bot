@@ -9,6 +9,10 @@ from extensions.map_testing.models.submissions import Submission
 from utils.changelog import ChangelogPaginator
 from utils.text import human_join, sanitize
 
+# Auto-archive window for the tester controls thread, in minutes (7 days, the Discord max).
+# Keeps it out of the archived list for the whole lifetime of a testing channel.
+CONTROL_THREAD_ARCHIVE_MINUTES = 10080
+
 
 def build_topic(
     map_name: str,
