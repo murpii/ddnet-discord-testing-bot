@@ -449,7 +449,7 @@ class SubmitDeclineModal(discord.ui.Modal, title="Decline Reason"):
     decline_reason = discord.ui.TextInput(
         label="Decline Reason",
         placeholder="Shared with the author. You can leave this blank.",
-        max_length=500,
+        max_length=3000,
         required=False,
         style=discord.TextStyle.long,
     )

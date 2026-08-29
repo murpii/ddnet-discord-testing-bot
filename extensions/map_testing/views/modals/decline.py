@@ -18,7 +18,7 @@ class DeclineReasonModal(discord.ui.Modal, title="Decline Reason"):
     decline_reason = discord.ui.TextInput(
         label="Your Decline Reason",
         placeholder="You can leave this blank. The modal exists so you can give the reason anonymously.",
-        max_length=500,
+        max_length=3000,
         required=False,
         style=discord.TextStyle.long,
     )
