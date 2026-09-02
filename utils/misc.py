@@ -69,10 +69,15 @@ def last_message_time(channel):
     )
 
 
-async def last_user_message(channel):
-    """When a non-bot last posted in `channel`, within the last 50 messages."""
+async def last_user_message(channel, author_ids=None):
+    """
+    When a non-bot last posted in `channel`, within the last 50 messages.
+    Pass `author_ids` to only count messages from those users.
+    """
     async for message in channel.history(limit=50):
-        if not message.author.bot:
+        if message.author.bot:
+            continue
+        if author_ids is None or message.author.id in author_ids:
             return message.created_at
     return None
 

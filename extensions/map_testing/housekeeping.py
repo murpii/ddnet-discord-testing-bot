@@ -155,14 +155,15 @@ class TestingHousekeeper(commands.Cog):
         if not self.bot.testing_manager.delete_on_archive:
             return
 
-        # a button and any user chat message both count as a response
+        # only the mapper counts as a response, a tester chatting doesn't reset the clock
+        mapper_ids = {author.id for author in tc.authors}
         responses = []
         interested = newest("MapTesting/STILL_INTERESTED")
         if interested is not None:
             responses.append(interested.timestamp)
-        human_msg = await last_user_message(tc.channel)
-        if human_msg is not None:
-            responses.append(human_msg)
+        mapper_msg = await last_user_message(tc.channel, author_ids=mapper_ids)
+        if mapper_msg is not None:
+            responses.append(mapper_msg)
         responded_at = max((stamp for stamp in responses if stamp > prompted_at), default=None)
 
         if responded_at is None:
