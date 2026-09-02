@@ -147,7 +147,7 @@ class TestingManager:
             isubm.parse()
         except ValueError:
             await message.reply(
-                "❌ That isn't a valid submission. Use the format "
+                "❌ Malformed submission. Use the format "
                 '`"Map Name" by Mapper [Server]` with a matching `.map` file attached.',
                 mention_author=False,
             )
@@ -407,17 +407,14 @@ class TestingManager:
             submission.bytes = None  # release the in-memory map; re-fetched lazily if needed
             return
 
-        # Bad update from the map author (right filename): never force-upload it.
-        # Report the bugs and, if the map had progressed, bump it to WAITING so the
-        # author fixes and resubmits.
+        # Bad update from the map author (right filename): don't upload it automatically,
+        # and bump the map to WAITING if it had progressed, so the author fixes and
+        # resubmits. It still gets an approval prompt below in case it should go up anyway.
         if is_author and filename_matches and debug_output:
-            await self.debug_report(message)
-            await self.waiting_for_bugs(tc, message)
-            log.info("Rejected bad update from author %s in #%s", message.author, tc.channel)
-            return
+            await self.move_to_waiting_after_bugs(tc, message)
 
-        # Otherwise (non-author, or filename mismatch) hold for manual approval via
-        # the Approve-Upload button, which uploads it as-is (override possible).
+        # Hold for manual approval via the Approve-Upload button, which uploads it
+        # as-is (override possible).
         reasons = []
         if debug_output:
             reasons.append("failed map checks")
@@ -716,7 +713,7 @@ class TestingManager:
         )
         log.info("Auto-moved #%s to %s after author update", tc.channel, transition.next_state.name)
 
-    async def waiting_for_bugs(self, tc: TestingChannel, upload_message: discord.Message) -> None:
+    async def move_to_waiting_after_bugs(self, tc: TestingChannel, upload_message: discord.Message) -> None:
         """Bump an evaluated map to WAITING after its author submits a bad update."""
         transition = resolve_transition(TestingChannelEvent.AUTHOR_BUGGY_UPLOAD, TransitionContext(
             state=tc.state, votes=tc.votes, bot_id=self.bot.user.id,
