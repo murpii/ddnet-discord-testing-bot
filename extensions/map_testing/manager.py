@@ -376,13 +376,15 @@ class TestingManager:
             return
 
         debug_output = await MapChecker.debug(submission)
+        if debug_output:
+            await self.debug_report(message)
 
         filename_matches = sanitize(attachment.filename[:-4]) == tc.filename
         is_author = message.author.id in {author.id for author in tc.authors}
         is_trusted = is_staff(message.author) or is_author
 
-        # A clean upload from a trusted author with the right filename goes live immediately
-        if is_trusted and filename_matches and not debug_output:
+        # Trusted updates with the right filename go live even when checks find bugs.
+        if is_trusted and filename_matches:
             previous = tc.submission
             try:
                 await upload_submission(self.bot.session, submission, tc, self.bot.config)
@@ -402,30 +404,21 @@ class TestingManager:
                 string=f'A new version of "{tc.map_name}" has been uploaded.',
                 url=message.jump_url,
             )
-            await self.apply_author_update(tc, message.author)
+            if not debug_output:
+                await self.apply_author_update(tc, message.author)
+            elif is_author:
+                await self.move_to_waiting_after_bugs(tc, message)
             await self.post_version_diff(tc, previous, submission)
             submission.bytes = None  # release the in-memory map; re-fetched lazily if needed
             return
 
-        # Bad update from the map author (right filename): don't upload it automatically,
-        # and bump the map to WAITING if it had progressed, so the author fixes and
-        # resubmits. It still gets an approval prompt below in case it should go up anyway.
-        if is_author and filename_matches and debug_output:
-            await self.move_to_waiting_after_bugs(tc, message)
-
-        # Hold for manual approval via the Approve-Upload button, which uploads it
-        # as-is (override possible).
+        # Other authors and mismatched filenames still need manual approval.
         reasons = []
-        if debug_output:
-            reasons.append("failed map checks")
         if not filename_matches:
             reasons.append(f"filename doesn't match `{tc.map_name}.map`")
         if not is_trusted:
             reasons.append("uploaded by a non-author")
         reason = ", ".join(reasons)
-
-        if debug_output:
-            await self.debug_report(message)
 
         prompt = await message.channel.send(
             view=ChannelUploadApproval(self.bot, message.author, reason),
@@ -719,7 +712,7 @@ class TestingManager:
             state=tc.state, votes=tc.votes, bot_id=self.bot.user.id,
         ))
         if transition.next_state is tc.state:
-            return  # TESTING/WAITING: bugs already reported, no movee
+            return  # TESTING/WAITING: bugs already reported, no move
 
         await self.apply_transition(
             tc, transition, upload_message.author,

@@ -256,6 +256,10 @@ Logs are written to `logs/bot.log` and `logs/map_testing.log` (and to the consol
    two distinct votes including one full Tester. New uploads from the author auto-update the
    current map and post a **"Changes vs previous version"** thread (summary + on-demand
    visual diff).
+   Updates from authors or staff with the matching filename upload even when automatic
+   checks find bugs. The bug warning stays, and initial submissions and Ready checks
+   keep their existing restrictions. Other uploaders or mismatched filenames still need
+   tester approval.
 5. When the map's release is announced (or a tester hits **Set to Released**), the channel
    moves to `RELEASED` with a 2-week grace notice.
 
