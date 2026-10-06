@@ -29,6 +29,8 @@ class TestingHousekeeper(commands.Cog):
         self.waiting_quiet_after = config_days("WAITING_QUIET_AFTER_DAYS", 14)
         self.prompt_no_response_after = config_days("PROMPT_NO_RESPONSE_AFTER_DAYS", 7)
         self.quiet_after_response = config_days("QUIET_AFTER_RESPONSE_DAYS", 30)
+        self.declined_grace = config_days("DECLINED_GRACE_DAYS", 3)
+        self.declined_archive_after = config_days("DECLINED_ARCHIVE_AFTER_DAYS", 7)
 
     async def cog_load(self):
         self.housekeeping_task.start()
@@ -70,6 +72,8 @@ class TestingHousekeeper(commands.Cog):
             await self.check_grace(tc, now, newest)
         elif tc.state is MapState.WAITING:
             await self.check_waiting(tc, now, newest)
+        elif tc.state is MapState.DECLINED:
+            await self.check_declined(tc, now, newest)
 
     async def auto_archive(self, tc, reason: str) -> None:
         ok, detail = await self.bot.testing_manager.archive_channel(tc, reason=reason)
@@ -115,6 +119,19 @@ class TestingHousekeeper(commands.Cog):
                 category="MapTesting/GRACE_WARNING",
                 string=f'Grace period reminder sent for "{tc.map_name}".',
             )
+
+    async def check_declined(self, tc, now, newest) -> None:
+        """Archive a declined channel once it stays quiet after a short grace period"""
+        declined = newest("MapTesting/DECLINE")
+        if declined is None or not self.bot.testing_manager.delete_on_archive:
+            return
+        # the quiet clock only starts once the grace period is over
+        quiet_since = declined.timestamp + self.declined_grace
+        last_msg = last_message_time(tc.channel)
+        if last_msg is not None and last_msg > quiet_since:
+            quiet_since = last_msg
+        if now - quiet_since >= self.declined_archive_after:
+            await self.auto_archive(tc, "the map was declined")
 
     async def check_waiting(self, tc, now, newest) -> None:
         """
