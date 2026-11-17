@@ -45,10 +45,13 @@ class DDNetTestingBot(commands.Bot):
     """
 
     def __init__(self, **kwargs):
+        intents = Intents.default()
+        intents.message_content = True
+        intents.members = True
         super().__init__(
             command_prefix="$",
             help_command=None,
-            intents=Intents().all(),
+            intents=intents,
         )
 
         self.config = kwargs.pop("config")

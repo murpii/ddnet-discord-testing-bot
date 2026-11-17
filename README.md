@@ -75,12 +75,12 @@ pip install -r requirements.txt
    **New Application**.
 2. Open the **Bot** tab -> **Reset Token** and copy the token (you'll put it in
    `config.ini` as `TOKEN_DISCORD`). Keep it secret.
-3. Still on the **Bot** tab, enable all three **Privileged Gateway Intents**:
-   - **Presence Intent**
+3. Still on the **Bot** tab, enable these two **Privileged Gateway Intents**:
    - **Server Members Intent**
    - **Message Content Intent**
 
-   The bot starts with `Intents.all()`, so all three must be on or it won't connect.
+   The bot requests both on startup, so it won't connect unless they are on. The
+   Presence Intent is not used.
 4. **Invite the bot.** Under **OAuth2 -> URL Generator**, tick the scopes `bot` and
    `applications.commands`. For a dedicated testing server the simplest choice is to grant
    **Administrator**. If you prefer granular permissions, the bot needs at least:
